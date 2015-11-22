@@ -1,0 +1,146 @@
+---
+title: "NOAA Storm Analysis: Top Health and Financial Damage Events"
+output: html_document
+---
+##Synopsis 
+Tornados are by far the leading cause of injuries, fatalities, property damage, and crop damage across the United States.  This report analyzes storm data from the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database.  The events tracked in this database start in the year 1950 and end in November 2011.
+  
+##Data Processing
+```{r, echo=FALSE}
+#set the working directory
+setwd("C:/Users/kerry_000/Documents/GitHub/RepData_PeerAssessment2")
+```
+```{r, cache=TRUE}
+#read the data
+rawdata<-read.csv("repdata-data-StormData.csv.bz2")
+
+```
+  
+    
+Prepare the data by aggregating injuries, fatalities, property damage, and crop damage by events.  Only the top 10 events are displayed in this report.  
+```{r, message=FALSE}
+#load the dplyr package for grouping and summarizing
+library(dplyr)  
+
+#aggregate health issues into a data frame of the top 10 health events
+healthbyEVTYPE <- rawdata %>% group_by(EVTYPE) %>% summarise(TotalInjuries = sum(INJURIES), TotalFatalities=sum(FATALITIES))
+healthbyEVTYPE$Total <- healthbyEVTYPE$TotalInjuries + healthbyEVTYPE$TotalFatalities
+top10healthEVTYPE<- head(healthbyEVTYPE[order(-healthbyEVTYPE$Total), ],10)
+```
+  
+    
+The property and crop data needs conversion of text multipliers into numeric before we can aggregate  
+the data into top 10 financial damage events.  
+
+```{r}
+#unique exponents used in property damage
+unique(rawdata$PROPDMGEXP)
+```
+```{r}
+#unique exponents used in crop damage
+unique(rawdata$CROPDMGEXP)
+```
+  
+```{r}
+#copy just the variables for property and crop damage
+dmgdata<-data.frame(rawdata$EVTYPE,rawdata$PROPDMG,rawdata$PROPDMGEXP,rawdata$CROPDMG,rawdata$CROPDMGEXP)
+names(dmgdata)<-c("EVTYPE","PROPDMG","PROPDMGEXP","CROPDMG","CROPDMGEXP")
+
+#Replace exponent code with numeric values
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="M"] <- 1e+06
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="m"] <- 1e+06
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="K"] <- 1e+03
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="H"] <- 1e+02
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="h"] <- 1e+06
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="B"] <- 1e+09
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="8"] <- 1e+08
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="7"] <- 1e+07
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="6"] <- 1e+06
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="5"] <- 1e+05
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="4"] <- 1e+04
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="3"] <- 1e+03
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="2"] <- 1e+02
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="1"] <- 1e+01
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="0"] <- 1
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP==""]  <- 1
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="+"] <- 0
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="-"] <- 0
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP=="?"] <- 0
+
+#multiply the base and exponent to get numerical total of property damage
+dmgdata$PROPDMGN <- dmgdata$PROPDMG * dmgdata$PROPDMGEXPN
+```
+  
+Crop damage
+```{r}
+#Replace exponent code with numeric values
+dmgdata$CROPDMGEXPN[dmgdata$CROPDMGEXP=="M"] <- 1e+06
+dmgdata$CROPDMGEXPN[dmgdata$CROPDMGEXP=="m"] <- 1e+06
+dmgdata$CROPDMGEXPN[dmgdata$CROPDMGEXP=="K"] <- 1e+03
+dmgdata$CROPDMGEXPN[dmgdata$CROPDMGEXP=="k"] <- 1e+03
+dmgdata$CROPDMGEXPN[dmgdata$CROPDMGEXP=="B"] <- 1e+09
+dmgdata$CROPDMGEXPN[dmgdata$CROPDMGEXP=="2"] <- 1e+02
+dmgdata$PROPDMGEXPN[dmgdata$PROPDMGEXP==""]  <- 1
+dmgdata$CROPDMGEXPN[dmgdata$CROPDMGEXP=="0"] <- 1
+dmgdata$CROPDMGEXPN[dmgdata$CROPDMGEXP=="?"] <- 0
+
+#Multiply the base and exponent to get numerical total of crop damage
+dmgdata$CROPDMGN <- dmgdata$CROPDMG * dmgdata$CROPDMGEXPN
+```
+  
+    
+Aggregate damage into top 10 events  
+
+```{r}
+dmgbyEVTYPE <- dmgdata %>% group_by(EVTYPE) %>% summarise(TotalPropDmg = sum(PROPDMGN), TotalCropDmg=sum(CROPDMGN))
+dmgbyEVTYPE$Total <- dmgbyEVTYPE$TotalPropDmg + dmgbyEVTYPE$TotalCropDmg
+top10dmgbyEVTYPE<- head(dmgbyEVTYPE[order(-dmgbyEVTYPE$Total), ],10)
+```
+  
+    
+##Results  
+  
+####Question 1. Across the United States, which types of events are most harmful with respect to population health?
+  
+```{r}
+#Plot the top 10 health events.
+barplot(top10healthEVTYPE$Total, 
+        main = "Top 10 Health Events by Event Type", 
+        xlab= "Events",
+        ylab= "Total Injuries and Fatalities",
+                names.arg = top10healthEVTYPE$EVTYPE, cex.names = .4, col="red")
+```  
+  
+  Figure 1. This plot compares the total reported injuries plus fatalities by event type.  
+    
+      
+```{r}
+#Data for the plot in Figure 1 above.
+top10healthEVTYPE
+```  
+  
+From the data above, Tornados are by far the leading cause of injury and fatalities across the United States.  
+    
+      
+####Question 2. Across the United States, which types of events have the greatest economic consequences?  
+  
+  
+```{r}
+#Plot the top 10 financial damage events.
+barplot(top10dmgbyEVTYPE$Total, 
+        main ="Top 10 Financial Damage Events by Event Type",
+        xlab = "Events",
+        ylab = "Total Property and Crop Damage (Dollars)",
+        names.arg = top10dmgbyEVTYPE$EVTYPE, 
+        cex.names = .4, 
+        col="red")
+```
+  
+   Figure 2. This plot compares the total reported property damage plus crop damage in dollars by event type.  
+   
+```{r}
+#Data for plot in Figure 2 above.
+top10dmgbyEVTYPE
+```
+  
+  From the data, Tornados again are by far the leading cause of property and crop damage across the United States.
